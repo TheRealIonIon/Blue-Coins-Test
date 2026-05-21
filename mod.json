@@ -1,0 +1,31 @@
+{
+	"geode": "5.6.0",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "ionion.bluecoins",
+	"name": "Blue Coins",
+	"version": "v1.0.0",
+	"developer": "Ion Ion",
+	"description": "Replaces the collected coin frames with blue ones",
+	"dependencies": {
+		"geode.node-ids": ">=v1.20.0"
+	},
+	"resources": {
+		"spritesheets": {
+			"StaticCoins": [
+				"res/static/*.png"
+			]
+		},
+		"sprites": [
+			"res/prev/*.png"
+		],
+        "files": [
+			"res/sheet/*.png",
+			"res/sheet/*.plist"
+		]
+	}
+}
