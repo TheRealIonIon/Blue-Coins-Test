@@ -1,6 +1,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/GameObject.hpp>
+#include <Geode/modify/PauseLayer.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
 
 using namespace geode::prelude;
@@ -68,6 +69,46 @@ class $modify(GameObject) {
     }
 };
 
+class $modify(PauseLayer) {
+    void customSetup() {
+        PauseLayer::customSetup();
+
+        auto levelID = PlayLayer::get()->m_level->m_levelID;
+		bool levelCond = levelID < 50 || levelID >= 5001 && levelID <= 5004;
+		const char* dottedName = levelCond ? "DottedSecretCoin.png"_spr : "DottedUserCoin.png"_spr;
+
+        if (auto compactMenu = this->getChildByID("xjotabelikex.compact-pause-menu/coins-menu")) {
+            for (int i = 0; i < 3; i++) {
+                if (!compactMenu->getChildByType<CCNode>(i)) continue;
+                auto coinNode = compactMenu->getChildByType<CCNode>(i)->getChildByType<CCSprite>(0);
+
+                if (!coinNode) continue;
+                auto coinSpr = typeinfo_cast<CCSprite*>(coinNode);
+
+                if (coinSpr) {
+                    auto newFrame = CCSprite::createWithSpriteFrameName(dottedName);  
+                    if (newFrame) coinSpr->setDisplayFrame(newFrame->displayFrame());
+                }
+            }            
+        }
+
+        auto bottomMenu = this->getChildByID("bottom-button-menu");
+        if (!bottomMenu) return;
+
+        for (int i = 1; i <= 3; i++) {
+            if (!bottomMenu->getChildByTag(1000 + i)) continue;
+
+            auto coinNode = bottomMenu->getChildByTag(1000 + i);
+            auto coinSpr = typeinfo_cast<CCSprite*>(coinNode);
+
+            if (coinSpr) {
+                auto newFrame = CCSprite::createWithSpriteFrameName(dottedName);  
+                if (newFrame) coinSpr->setDisplayFrame(newFrame->displayFrame());
+            }
+        }
+    }
+};
+
 class $modify(EndLevelLayer) {
 	void customSetup() {
 		EndLevelLayer::customSetup();
@@ -95,6 +136,9 @@ class $modify(EndLevelLayer) {
 			auto oldSpr = mainLayer->getChildByID(coinNode);
 
 			if (oldSpr && coins[i-1]) {
+                auto coinObj = typeinfo_cast<CCSprite*>(oldSpr);
+                coinObj->setColor(ccColor3B({255, 255, 255}));
+
 				auto newNode = CCNode::create();
 				newNode->setID(blueNode);
 				newNode->setPosition(oldSpr->getPosition());

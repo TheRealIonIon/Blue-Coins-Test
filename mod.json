@@ -18,13 +18,14 @@
 		"spritesheets": {
 			"StaticCoins": [
 				"res/static/*.png"
-			],
-			"GJ_GameSheet02": [
-				"res/GJ_GameSheet02/*.png"
 			]
 		},
 		"sprites": [
 			"res/prev/*.png"
+		],
+        "files": [
+			"res/sheet/*.png",
+			"res/sheet/*.plist"
 		]
 	}
 }
