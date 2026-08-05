@@ -2,6 +2,8 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/EndLevelLayer.hpp>
 
+#define getFrameByName CCSpriteFrameCache::sharedSpriteFrameCache()->spriteFrameByName
+
 using namespace geode::prelude;
 
 class $modify(MyPlayLayer, PlayLayer) {
@@ -26,22 +28,77 @@ class $modify(MyPlayLayer, PlayLayer) {
         return statsMng->hasUserCoin(coinKey) || statsMng->hasPendingUserCoin(coinKey);
     }
 
-    bool init(GJGameLevel* level, bool rep, bool dco) {
-        if (!PlayLayer::init(level, rep, dco)) return false;
+    void updateCoins() {
+        std::vector<GameObject*> levelCoins;
+        std::string coinType = isRobtop(m_level) ? "Secret" : "User";
 
-        for (auto* gameObj : CCArrayExt<EffectGameObject*>(this->m_objects)) {
+        for (auto* gameObj : CCArrayExt<GameObject*>(this->m_objects)) {
             if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                gameObj->customSetup();
+                levelCoins.push_back(gameObj);
+                gameObj->m_addToNodeContainer = true;
             }
-        } 
+        }
 
-        return true;
+        std::sort(levelCoins.begin(), levelCoins.end(), 
+            [](GameObject* a, GameObject* b) {
+                float ax = a->getPositionX(), ay = a->getPositionY();
+                float bx = b->getPositionX(), by = b->getPositionY();
+                return (ax * ax + ay * ay) < (bx * bx + by * by);
+            }
+        );
+        
+        log::info("Coin count: {}", levelCoins.size());
+
+        for (int i = 0; i < levelCoins.size(); i++) {
+            if (this->hasCoin(i + 1)) {
+                auto coinSpr = typeinfo_cast<CCSprite*>(levelCoins[i]);
+                
+                if (!coinSpr) continue;
+                coinSpr->stopAllActions();
+
+                auto coinAnim = CCAnimation::create();
+                CCSpriteFrame* firstFrame = nullptr;
+
+                for (int j = 1; j <= 4; j++) {
+                    std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, j);
+
+                    if (auto coinFrame = getFrameByName(coinName.c_str())) {
+                        if (!firstFrame) firstFrame = coinFrame;
+                        coinAnim->addSpriteFrame(coinFrame);
+                    }
+                }
+
+                if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
+                    coinAnim->setDelayPerUnit(0.1f);
+                    if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
+                    coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
+
+                    coinSpr->setColor({ 255, 255, 255 });
+                    coinSpr->setID("blue-coin"_spr);
+                }
+            }
+        }
     }
 
     void resetLevel() {
         PlayLayer::resetLevel();
         m_fields->m_coinArr = {};
     }
+
+    void onEnterTransitionDidFinish() {
+        PlayLayer::onEnterTransitionDidFinish();
+        this->updateCoins();
+    }
+
+    // bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+    //     if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
+
+    //     // queueInMainThread([this] {
+    //         updateCoins();
+    //     // });
+
+    //     return true;
+    // }
 };
 
 class $modify(EndLevelLayer) {
@@ -65,13 +122,14 @@ class $modify(EndLevelLayer) {
                 newSpr->setPosition(oldSpr->getPosition());
                 mainLayer->addChild(newSpr, 10);
                 newSpr->setID(blueNode);
-			} else if (oldSpr) {
-                for (auto* gameObj : CCArrayExt<EffectGameObject*>(playLayer->m_objects)) {
-                    if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                        gameObj->customSetup();
-                    }
-                } 
-            }
+			} else if (oldSpr) playLayer->updateCoins();
+            // else if (oldSpr) {
+            //     for (auto* gameObj : CCArrayExt<EffectGameObject*>(playLayer->m_objects)) {
+            //         if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
+            //             gameObj->customSetup();
+            //         }
+            //     } 
+            // }
 		}
 	}
 };
@@ -208,63 +266,64 @@ class $modify(GameObject) {
     }
 };
 
-class $modify(EffectGameObject) {
-    void customSetup() {
-        EffectGameObject::customSetup();
+// class $modify(EffectGameObject) {
+//     void customSetup() {
+//         EffectGameObject::customSetup();
 
-        if (this->getChildByID("blue-coin"_spr)) return;
-        if (m_objectID != 142 && m_objectID != 1329) return;
+//         if (this->getChildByID("blue-coin"_spr)) return;
+//         if (m_objectID != 142 && m_objectID != 1329) return;
 
-        auto playLayer = static_cast<MyPlayLayer*>(PlayLayer::get());
-        if (!playLayer || !playLayer->m_level) return;
+//         auto playLayer = static_cast<MyPlayLayer*>(PlayLayer::get());
+//         if (!playLayer || !playLayer->m_level) return;
 
-        this->m_addToNodeContainer = true;
-        std::vector<EffectGameObject*> levelCoins;
+//         this->m_addToNodeContainer = true;
+//         std::vector<EffectGameObject*> levelCoins;
 
-        for (auto* gameObj : CCArrayExt<EffectGameObject*>(playLayer->m_objects)) {
-            if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                levelCoins.push_back(gameObj);
-            }
-        }
+//         for (auto* gameObj : CCArrayExt<GameObject*>(playLayer->m_objects)) {
+//             if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
+//                 levelCoins.push_back(typeinfo_cast<EffectGameObject*>(gameObj));
+//             }
+//         }
 
-        std::sort(levelCoins.begin(), levelCoins.end(), 
-            [](EffectGameObject* a, EffectGameObject* b) {
-                float ax = a->getPositionX(), ay = a->getPositionY();
-                float bx = b->getPositionX(), by = b->getPositionY();
-                return (ax * ax + ay * ay) < (bx * bx + by * by);
-            }
-        );
+//         std::sort(levelCoins.begin(), levelCoins.end(), 
+//             [](EffectGameObject* a, EffectGameObject* b) {
+//                 float ax = a->getPositionX(), ay = a->getPositionY();
+//                 float bx = b->getPositionX(), by = b->getPositionY();
+//                 return (ax * ax + ay * ay) < (bx * bx + by * by);
+//             }
+//         );
 
-        bool isRobtop = playLayer->isRobtop(playLayer->m_level);
-        std::string coinType = isRobtop ? "Secret" : "User";
+//         bool isRobtop = playLayer->isRobtop(playLayer->m_level);
+//         std::string coinType = isRobtop ? "Secret" : "User";
+//         log::info("Coin count: {}", levelCoins.size());
 
-        for (int i = 0; i < levelCoins.size(); i++) {
-            if (playLayer->hasCoin(i + 1)) {
-                auto coinSpr = typeinfo_cast<CCSprite*>(levelCoins[i]);
+//         for (int i = 0; i < levelCoins.size(); i++) {
+//             if (playLayer->hasCoin(i + 1)) {
+//                 auto coinSpr = typeinfo_cast<CCSprite*>(levelCoins[i]);
                 
-                if (!coinSpr) continue;
-                coinSpr->stopAllActions();
+//                 if (!coinSpr) continue;
+//                 coinSpr->stopAllActions();
 
-                auto coinAnim = CCAnimation::create();
-                CCSpriteFrame* firstFrame = nullptr;
+//                 auto coinAnim = CCAnimation::create();
+//                 CCSpriteFrame* firstFrame = nullptr;
 
-                for (int j = 1; j <= 4; j++) {
-                    std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, j);
-                    if (auto coinFrame = getFrameByName(coinName.c_str())) {
-                        if (!firstFrame) firstFrame = coinFrame;
-                        coinAnim->addSpriteFrame(coinFrame);
-                    }
-                }
+//                 for (int j = 1; j <= 4; j++) {
+//                     std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, j);
+//                     if (auto coinFrame = getFrameByName(coinName.c_str())) {
+//                         if (!firstFrame) firstFrame = coinFrame;
+//                         coinAnim->addSpriteFrame(coinFrame);
+//                     }
+//                 }
 
-                if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
-                    coinAnim->setDelayPerUnit(0.1f);
-                    if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
-                    coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
+//                 if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
+//                     coinAnim->setDelayPerUnit(0.1f);
+//                     if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
+//                     coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
 
-                    coinSpr->setColor({ 255, 255, 255 });
-                    coinSpr->setID("blue-coin"_spr);
-                }
-            }
-        }
-    }
-};
+//                     coinSpr->setColor({ 255, 255, 255 });
+//                     coinSpr->setID("blue-coin"_spr);
+//                 }
+//             }
+//         }
+//     }
+// };
