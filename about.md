@@ -5,7 +5,8 @@ Replaces the dotted frames of already collected coins with custom blue ones (sec
 # Special Thanks
 
 - **GGNova** - Mod idea & User coin design
-- **Prevter & Undefined0** - Little help with code
+- **RobTop** - Blue secret coin textures
+- **ArcticWoof** - Code for modifying in-game coins
 
 # Mod Previews
 

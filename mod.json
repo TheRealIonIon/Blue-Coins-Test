@@ -16,16 +16,12 @@
 	},
 	"resources": {
 		"spritesheets": {
-			"StaticCoins": [
-				"res/static/*.png"
+			"BlueCoins": [
+				"res/coins/*.png"
 			]
 		},
 		"sprites": [
 			"res/prev/*.png"
-		],
-        "files": [
-			"res/sheet/*.png",
-			"res/sheet/*.plist"
 		]
 	}
 }

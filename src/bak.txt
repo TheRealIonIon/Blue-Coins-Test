@@ -11,7 +11,8 @@ class $modify(MyPlayLayer, PlayLayer) {
 
     bool isRobtop(GJGameLevel* level) {
         int levelID = level->m_levelID.value();
-        if (levelID > 0 && levelID < 50) return true;
+        if (levelID < 50) return true;
+
         if (levelID >= 1001 && levelID <= 1003) return true;
         if (levelID >= 4001 && levelID <= 4003) return true;
         return levelID >= 5001 && levelID <= 5004 || levelID == 3001;
@@ -22,25 +23,10 @@ class $modify(MyPlayLayer, PlayLayer) {
         auto statsMng = GameStatsManager::sharedState();
         if (!coinKey || !statsMng) return false;
 
-        if (isRobtop(this->m_level)) return statsMng->hasSecretCoin(coinKey);
-        return statsMng->hasUserCoin(coinKey) || statsMng->hasPendingUserCoin(coinKey);
-    }
+        if (isRobtop(m_level)) return statsMng->hasSecretCoin(coinKey);
+        if (m_level->areCoinsVerified()) return statsMng->hasUserCoin(coinKey);
 
-    bool init(GJGameLevel* level, bool rep, bool dco) {
-        if (!PlayLayer::init(level, rep, dco)) return false;
-
-        for (auto* gameObj : CCArrayExt<EffectGameObject*>(this->m_objects)) {
-            if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                gameObj->customSetup();
-            }
-        } 
-
-        return true;
-    }
-
-    void resetLevel() {
-        PlayLayer::resetLevel();
-        m_fields->m_coinArr = {};
+        return statsMng->hasPendingUserCoin(coinKey);
     }
 };
 
@@ -65,19 +51,14 @@ class $modify(EndLevelLayer) {
                 newSpr->setPosition(oldSpr->getPosition());
                 mainLayer->addChild(newSpr, 10);
                 newSpr->setID(blueNode);
-			} else if (oldSpr) {
-                for (auto* gameObj : CCArrayExt<EffectGameObject*>(playLayer->m_objects)) {
-                    if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                        gameObj->customSetup();
-                    }
-                } 
-            }
+			}
 		}
 	}
 };
 
 /*
-    Code adapted from Rated Layouts mod, with ArcticWoof's approval:
+    Code adapted from Rated Layouts mod
+    ArcticWoof allowed me to re-use his code for the purpose of my mod
     https://github.com/RatedLayouts/RatedLayouts/blob/main/src/hook/GameObjectCoin.cpp
 */
 
@@ -85,26 +66,26 @@ class $modify(EndLevelLayer) {
 #include <Geode/modify/GameObject.hpp>
 #include <Geode/modify/EffectGameObject.hpp>
 
-#define getFrameByName CCSpriteFrameCache::sharedSpriteFrameCache()->spriteFrameByName
-
 class $modify(CCSprite) {
     void setDisplayFrame(CCSpriteFrame* newFrame) {
         if (this->getID() == "blue-coin"_spr) {
             auto playLayer = static_cast<MyPlayLayer*>(PlayLayer::get());
             bool isRobtop = playLayer->isRobtop(playLayer->m_level);
-            std::string coinType = isRobtop ? "Secret" : "User";
+            std::string coinType = playLayer ? "Secret" : "User";
 
             if (!newFrame) {
-                auto coinName = isRobtop ? "SecretCoin1.png"_spr : "UserCoin1.png"_spr;
-                CCSprite::setDisplayFrame(getFrameByName(coinName));
+                auto coinName = playLayer ? "SecretCoin1.png"_spr : "UserCoin1.png"_spr;
+                auto coinSpr = CCSprite::createWithSpriteFrameName(coinName);
+                if (coinSpr) CCSprite::setDisplayFrame(coinSpr->displayFrame());
                 return;
             }
 
             for (int i = 1; i <= 4; i++) {
                 std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, i);
-                auto coinFrame = getFrameByName(coinName.c_str());
+                auto coinSpr = CCSprite::createWithSpriteFrameName(coinName.c_str());
+                auto coinFrame = coinSpr->displayFrame();
 
-                if (coinFrame && coinFrame == newFrame) {
+                if (coinFrame && coinFrame->getTexture() == newFrame->getTexture()) {
                     CCSprite::setDisplayFrame(newFrame);
                     return;
                 }
@@ -166,22 +147,26 @@ class $modify(GameObject) {
                 }
 
                 if (hasExisted) continue;
-                std::vector<CCNode*> objStack{childNode};
+                // std::vector<CCNode*> objStack{childNode};
 
-                while (!objStack.empty()) {
-                    auto currentNode = objStack.back();
+                // while (!objStack.empty()) {
+                //     auto currentNode = objStack.back();
 
-                    objStack.pop_back();
-                    if (!currentNode) continue;
+                //     objStack.pop_back();
+                //     if (!currentNode) continue;
 
                     if (auto coinSpr = typeinfo_cast<CCSprite*>(childNode)) {
+                        if (typeinfo_cast<GameObject*>(childNode) != this) continue;
+
                         CCAnimation* coinAnim = CCAnimation::create();
                         CCSpriteFrame* firstFrame = nullptr;
                         std::string coinType = this->m_objectID == 142 ? "Secret" : "User";
 
                         for (int i = 1; i <= 4; i++) {
                             auto coinName = fmt::format("{}Coin{}.png"_spr, coinType, i);
-                            if (auto coinFrame = getFrameByName(coinName.c_str())) {
+                            auto tempSpr = CCSprite::createWithSpriteFrameName(coinName.c_str());
+
+                            if (auto coinFrame = tempSpr->displayFrame()) {
                                 if (!firstFrame) firstFrame = coinFrame;
                                 coinAnim->addSpriteFrame(coinFrame);
                             }
@@ -197,8 +182,8 @@ class $modify(GameObject) {
                         }
                     }
 
-                    for (auto stackChild : currentNode->getChildrenExt()) objStack.push_back(stackChild);
-                }
+                //     for (auto stackChild : currentNode->getChildrenExt()) objStack.push_back(stackChild);
+                // }
             }
 
             return;
@@ -219,12 +204,40 @@ class $modify(EffectGameObject) {
         if (!playLayer || !playLayer->m_level) return;
 
         this->m_addToNodeContainer = true;
-        std::vector<EffectGameObject*> levelCoins;
+        static CCSpriteFrame* blueFirst = nullptr;
+        static CCAnimation* blueAnim = CCAnimation::create();
+        std::string coinType = m_objectID == 142 ? "Secret" : "User";
 
-        for (auto* gameObj : CCArrayExt<EffectGameObject*>(playLayer->m_objects)) {
-            if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                levelCoins.push_back(gameObj);
-            }
+        for (int i = 1; i <= 4; i++) {
+            std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, i);
+            auto coinSpr = CCSprite::createWithSpriteFrameName(coinName.c_str());
+
+            auto coinFrame = coinSpr->displayFrame();
+            if (!blueFirst) blueFirst = coinFrame;
+            blueAnim->addSpriteFrame(coinFrame);
+        }
+            
+        blueAnim->setDelayPerUnit(0.1f);
+        blueFirst->retain();
+        blueAnim->retain();
+
+        auto applyAnim = [](CCSprite* coinSpr) {
+            if (!coinSpr) return;
+            coinSpr->stopAllActions();
+
+            if (blueFirst) coinSpr->setDisplayFrame(blueFirst);
+            coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(blueAnim)));
+            
+            coinSpr->setColor({ 255, 255, 255 });
+            coinSpr->setID("blue-coin"_spr);
+        };
+
+        std::vector<EffectGameObject*> levelCoins;
+        CCArrayExt<GameObject*> objArr = playLayer->m_objects;
+
+        for (auto* gameObj : objArr) {
+            if (gameObj->m_objectID != 142 && gameObj->m_objectID != 1329) continue;
+            levelCoins.push_back(typeinfo_cast<EffectGameObject*>(gameObj));
         }
 
         std::sort(levelCoins.begin(), levelCoins.end(), 
@@ -235,36 +248,14 @@ class $modify(EffectGameObject) {
             }
         );
 
-        bool isRobtop = playLayer->isRobtop(playLayer->m_level);
-        std::string coinType = isRobtop ? "Secret" : "User";
-
         for (int i = 0; i < levelCoins.size(); i++) {
             if (playLayer->hasCoin(i + 1)) {
                 auto coinSpr = typeinfo_cast<CCSprite*>(levelCoins[i]);
-                
-                if (!coinSpr) continue;
-                coinSpr->stopAllActions();
-
-                auto coinAnim = CCAnimation::create();
-                CCSpriteFrame* firstFrame = nullptr;
-
-                for (int j = 1; j <= 4; j++) {
-                    std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, j);
-                    if (auto coinFrame = getFrameByName(coinName.c_str())) {
-                        if (!firstFrame) firstFrame = coinFrame;
-                        coinAnim->addSpriteFrame(coinFrame);
-                    }
-                }
-
-                if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
-                    coinAnim->setDelayPerUnit(0.1f);
-                    if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
-                    coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
-
-                    coinSpr->setColor({ 255, 255, 255 });
-                    coinSpr->setID("blue-coin"_spr);
-                }
+                applyAnim(coinSpr);
             }
         }
+
+        blueFirst->release();
+        blueAnim->release();
     }
 };
