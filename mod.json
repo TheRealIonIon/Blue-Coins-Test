@@ -10,7 +10,8 @@
 	"name": "Blue Coins",
 	"version": "v1.0.0",
 	"developer": "Ion Ion",
-	"description": "Replaces the collected coin frames with blue ones",
+	"description": "Geode mod that replaces the collected coin frames with blue ones",
+	"tags": ["universal", "customization", "enhancement", "offline"],
 	"dependencies": {
 		"geode.node-ids": ">=v1.20.0"
 	},

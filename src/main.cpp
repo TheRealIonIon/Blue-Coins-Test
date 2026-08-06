@@ -133,11 +133,7 @@ class $modify(CCSprite) {
             bool isRobtop = playLayer->isRobtop(playLayer->m_level);
             std::string coinType = isRobtop ? "Secret" : "User";
 
-            if (!newFrame) {
-                auto coinName = isRobtop ? "SecretCoin1.png"_spr : "UserCoin1.png"_spr;
-                CCSprite::setDisplayFrame(getFrameByName(coinName));
-                return;
-            }
+            if (!newFrame) newFrame = getFrameByName(isRobtop ? "SecretCoin1.png"_spr : "UserCoin1.png"_spr);
 
             for (int i = 1; i <= 4; i++) {
                 std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, i);
@@ -205,39 +201,29 @@ class $modify(GameObject) {
                 }
 
                 if (hasExisted) continue;
-                std::vector<CCNode*> objStack{childNode};
 
-                // while (!objStack.empty()) {
-                //     auto currentNode = objStack.back();
+                if (auto coinSpr = typeinfo_cast<CCSprite*>(childNode)) {
+                    CCAnimation* coinAnim = CCAnimation::create();
+                    CCSpriteFrame* firstFrame = nullptr;
+                    std::string coinType = this->m_objectID == 142 ? "Secret" : "User";
 
-                //     objStack.pop_back();
-                //     if (!currentNode) continue;
-
-                    if (auto coinSpr = typeinfo_cast<CCSprite*>(childNode)) {
-                        CCAnimation* coinAnim = CCAnimation::create();
-                        CCSpriteFrame* firstFrame = nullptr;
-                        std::string coinType = this->m_objectID == 142 ? "Secret" : "User";
-
-                        for (int i = 1; i <= 4; i++) {
-                            auto coinName = fmt::format("{}Coin{}.png"_spr, coinType, i);
-                            if (auto coinFrame = getFrameByName(coinName.c_str())) {
-                                if (!firstFrame) firstFrame = coinFrame;
-                                coinAnim->addSpriteFrame(coinFrame);
-                            }
-                        }
-
-                        if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
-                            coinAnim->setDelayPerUnit(0.05f);
-                            if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
-                            coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
-
-                            coinSpr->setColor({ 255, 255, 255 });
-                            coinSpr->setID("blue-coin"_spr);
+                    for (int i = 1; i <= 4; i++) {
+                        auto coinName = fmt::format("{}Coin{}.png"_spr, coinType, i);
+                        if (auto coinFrame = getFrameByName(coinName.c_str())) {
+                            if (!firstFrame) firstFrame = coinFrame;
+                            coinAnim->addSpriteFrame(coinFrame);
                         }
                     }
 
-                //     for (auto stackChild : currentNode->getChildrenExt()) objStack.push_back(stackChild);
-                // }
+                    if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
+                        coinAnim->setDelayPerUnit(0.05f);
+                        if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
+                        coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
+
+                        coinSpr->setColor({ 255, 255, 255 });
+                        coinSpr->setID("blue-coin"_spr);
+                    }
+                }
             }
 
             return;
