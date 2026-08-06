@@ -46,8 +46,6 @@ class $modify(MyPlayLayer, PlayLayer) {
                 return (ax * ax + ay * ay) < (bx * bx + by * by);
             }
         );
-        
-        log::info("Coin count: {}", levelCoins.size());
 
         for (int i = 0; i < levelCoins.size(); i++) {
             if (this->hasCoin(i + 1)) {
@@ -61,7 +59,6 @@ class $modify(MyPlayLayer, PlayLayer) {
 
                 for (int j = 1; j <= 4; j++) {
                     std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, j);
-
                     if (auto coinFrame = getFrameByName(coinName.c_str())) {
                         if (!firstFrame) firstFrame = coinFrame;
                         coinAnim->addSpriteFrame(coinFrame);
@@ -85,20 +82,10 @@ class $modify(MyPlayLayer, PlayLayer) {
         m_fields->m_coinArr = {};
     }
 
-    void onEnterTransitionDidFinish() {
-        PlayLayer::onEnterTransitionDidFinish();
+    void setupHasCompleted() {
+        PlayLayer::setupHasCompleted();
         this->updateCoins();
     }
-
-    // bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-    //     if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
-
-    //     // queueInMainThread([this] {
-    //         updateCoins();
-    //     // });
-
-    //     return true;
-    // }
 };
 
 class $modify(EndLevelLayer) {
@@ -114,22 +101,16 @@ class $modify(EndLevelLayer) {
 		for (int i = 1; i <= 3; i++) {
 			auto coinNode = fmt::format("coin-{}-sprite", i);
 			auto blueNode = fmt::format("blue-{}-sprite", i);
-			auto oldSpr = mainLayer->getChildByID(coinNode);
-
-			if (oldSpr && playLayer->m_fields->m_coinArr[i-1]) {
-                typeinfo_cast<CCSprite*>(oldSpr)->setColor({ 255, 255, 255 });
-                auto newSpr = CCSprite::createWithSpriteFrameName(frameName);
-                newSpr->setPosition(oldSpr->getPosition());
-                mainLayer->addChild(newSpr, 10);
-                newSpr->setID(blueNode);
-			} else if (oldSpr) playLayer->updateCoins();
-            // else if (oldSpr) {
-            //     for (auto* gameObj : CCArrayExt<EffectGameObject*>(playLayer->m_objects)) {
-            //         if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-            //             gameObj->customSetup();
-            //         }
-            //     } 
-            // }
+			
+            if (playLayer->m_fields->m_coinArr[i-1]) {
+                if (auto oldSpr = mainLayer->getChildByID(coinNode)) {
+                    typeinfo_cast<CCSprite*>(oldSpr)->setColor({ 255, 255, 255 });
+                    auto newSpr = CCSprite::createWithSpriteFrameName(frameName);
+                    newSpr->setPosition(oldSpr->getPosition());
+                    mainLayer->addChild(newSpr, 10);
+                    newSpr->setID(blueNode);
+                } else playLayer->updateCoins();
+            }
 		}
 	}
 };
@@ -226,11 +207,11 @@ class $modify(GameObject) {
                 if (hasExisted) continue;
                 std::vector<CCNode*> objStack{childNode};
 
-                while (!objStack.empty()) {
-                    auto currentNode = objStack.back();
+                // while (!objStack.empty()) {
+                //     auto currentNode = objStack.back();
 
-                    objStack.pop_back();
-                    if (!currentNode) continue;
+                //     objStack.pop_back();
+                //     if (!currentNode) continue;
 
                     if (auto coinSpr = typeinfo_cast<CCSprite*>(childNode)) {
                         CCAnimation* coinAnim = CCAnimation::create();
@@ -255,8 +236,8 @@ class $modify(GameObject) {
                         }
                     }
 
-                    for (auto stackChild : currentNode->getChildrenExt()) objStack.push_back(stackChild);
-                }
+                //     for (auto stackChild : currentNode->getChildrenExt()) objStack.push_back(stackChild);
+                // }
             }
 
             return;
