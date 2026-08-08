@@ -8,7 +8,8 @@ using namespace geode::prelude;
 
 class $modify(MyPlayLayer, PlayLayer) {
     struct Fields {
-        std::array<bool, 3> m_coinArr = {};
+        std::array<bool, 3> m_coinPicks = {};
+        std::vector<GameObject*> m_coinArr;
     };
 
     bool isRobtop(GJGameLevel* level) {
@@ -20,36 +21,29 @@ class $modify(MyPlayLayer, PlayLayer) {
     }
 
     bool hasCoin(int n) {
-        auto coinKey = this->m_level->getCoinKey(n);
+        if (m_level->m_levelID == 0) {
+            switch (n) {
+                case 1: return m_level->m_firstCoinVerified;
+                case 2: return m_level->m_secondCoinVerified;
+                case 3: return m_level->m_thirdCoinVerified;
+            }
+        }
+
+        auto coinKey = m_level->getCoinKey(n);
         auto statsMng = GameStatsManager::sharedState();
         if (!coinKey || !statsMng) return false;
 
-        if (isRobtop(this->m_level)) return statsMng->hasSecretCoin(coinKey);
+        if (isRobtop(m_level)) return statsMng->hasSecretCoin(coinKey);
         return statsMng->hasUserCoin(coinKey) || statsMng->hasPendingUserCoin(coinKey);
     }
 
     void updateCoins() {
-        std::vector<GameObject*> levelCoins;
         std::string coinType = isRobtop(m_level) ? "Secret" : "User";
+        int coinCount = m_fields->m_coinArr.size();
 
-        for (auto* gameObj : CCArrayExt<GameObject*>(this->m_objects)) {
-            if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                levelCoins.push_back(gameObj);
-                gameObj->m_addToNodeContainer = true;
-            }
-        }
-
-        std::sort(levelCoins.begin(), levelCoins.end(), 
-            [](GameObject* a, GameObject* b) {
-                float ax = a->getPositionX(), ay = a->getPositionY();
-                float bx = b->getPositionX(), by = b->getPositionY();
-                return (ax * ax + ay * ay) < (bx * bx + by * by);
-            }
-        );
-
-        for (int i = 0; i < levelCoins.size(); i++) {
+        for (int i = 0; i < coinCount; i++) {
             if (this->hasCoin(i + 1)) {
-                auto coinSpr = typeinfo_cast<CCSprite*>(levelCoins[i]);
+                auto coinSpr = typeinfo_cast<CCSprite*>(m_fields->m_coinArr[i]);
                 
                 if (!coinSpr) continue;
                 coinSpr->stopAllActions();
@@ -79,11 +73,29 @@ class $modify(MyPlayLayer, PlayLayer) {
 
     void resetLevel() {
         PlayLayer::resetLevel();
-        m_fields->m_coinArr = {};
+        m_fields->m_coinPicks = {};
     }
 
     void setupHasCompleted() {
         PlayLayer::setupHasCompleted();
+
+        for (auto* gameObj : CCArrayExt<GameObject*>(this->m_objects)) {
+            if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
+                m_fields->m_coinArr.push_back(gameObj);
+                gameObj->m_addToNodeContainer = true;
+            }
+        }
+
+        std::sort(
+            m_fields->m_coinArr.begin(), 
+            m_fields->m_coinArr.end(),
+            [](GameObject* a, GameObject* b) {
+                float ax = a->getPositionX(), ay = a->getPositionY();
+                float bx = b->getPositionX(), by = b->getPositionY();
+                return (ax * ax + ay * ay) < (bx * bx + by * by);
+            }
+        );
+        
         this->updateCoins();
     }
 };
@@ -96,20 +108,22 @@ class $modify(EndLevelLayer) {
         auto isRobtop = playLayer->isRobtop(playLayer->m_level);
 
 		auto mainLayer = this->getChildByID("main-layer");
+        playLayer->updateCoins();
+
         const char* frameName = isRobtop ? "SecretCoin1.png"_spr : "UserCoin1.png"_spr;
 
 		for (int i = 1; i <= 3; i++) {
 			auto coinNode = fmt::format("coin-{}-sprite", i);
 			auto blueNode = fmt::format("blue-{}-sprite", i);
 			
-            if (playLayer->m_fields->m_coinArr[i-1]) {
+            if (playLayer->m_fields->m_coinPicks[i-1]) {
                 if (auto oldSpr = mainLayer->getChildByID(coinNode)) {
                     typeinfo_cast<CCSprite*>(oldSpr)->setColor({ 255, 255, 255 });
                     auto newSpr = CCSprite::createWithSpriteFrameName(frameName);
                     newSpr->setPosition(oldSpr->getPosition());
                     mainLayer->addChild(newSpr, 10);
                     newSpr->setID(blueNode);
-                } else playLayer->updateCoins();
+                }
             }
 		}
 	}
@@ -155,27 +169,18 @@ class $modify(CCSprite) {
 class $modify(GameObject) {
     void playDestroyObjectAnim(GJBaseGameLayer* gameLayer) {
         if (m_objectID == 142 || m_objectID == 1329) {
-            int coinIndex = -1;
-            std::vector<GameObject*> levelCoins;
-            auto playLayer = static_cast<MyPlayLayer*>(PlayLayer::get());
-
-            for (auto gameObj : CCArrayExt<GameObject*>(playLayer->m_objects)) {
-                if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-                    levelCoins.push_back(gameObj);
-                }
+            if (gameLayer->m_isEditor || !this->m_isUIObject) {
+                GameObject::playDestroyObjectAnim(gameLayer);
+                return;
             }
 
-            std::sort(levelCoins.begin(), levelCoins.end(), 
-                [](GameObject* a, GameObject* b) {
-                    float ax = a->getPositionX(), ay = a->getPositionY();
-                    float bx = b->getPositionX(), by = b->getPositionY();
-                    return (ax * ax + ay * ay) < (bx * bx + by * by);
-                }
-            );
+            auto playLayer = static_cast<MyPlayLayer*>(PlayLayer::get());
+            size_t coinCount = playLayer->m_fields->m_coinArr.size();
+            int coinIndex = -1;
 
-            for (size_t i = 0; i < levelCoins.size(); i++) {
-                if (levelCoins[i] == this) {
-                    playLayer->m_fields->m_coinArr[i] = true;
+            for (size_t i = 0; i < coinCount; i++) {
+                if (playLayer->m_fields->m_coinArr[i] == this) {
+                    playLayer->m_fields->m_coinPicks[i] = true;
                     coinIndex = static_cast<int>(i + 1);
                 }
             }
@@ -232,65 +237,3 @@ class $modify(GameObject) {
         GameObject::playDestroyObjectAnim(gameLayer);
     }
 };
-
-// class $modify(EffectGameObject) {
-//     void customSetup() {
-//         EffectGameObject::customSetup();
-
-//         if (this->getChildByID("blue-coin"_spr)) return;
-//         if (m_objectID != 142 && m_objectID != 1329) return;
-
-//         auto playLayer = static_cast<MyPlayLayer*>(PlayLayer::get());
-//         if (!playLayer || !playLayer->m_level) return;
-
-//         this->m_addToNodeContainer = true;
-//         std::vector<EffectGameObject*> levelCoins;
-
-//         for (auto* gameObj : CCArrayExt<GameObject*>(playLayer->m_objects)) {
-//             if (gameObj->m_objectID == 142 || gameObj->m_objectID == 1329) {
-//                 levelCoins.push_back(typeinfo_cast<EffectGameObject*>(gameObj));
-//             }
-//         }
-
-//         std::sort(levelCoins.begin(), levelCoins.end(), 
-//             [](EffectGameObject* a, EffectGameObject* b) {
-//                 float ax = a->getPositionX(), ay = a->getPositionY();
-//                 float bx = b->getPositionX(), by = b->getPositionY();
-//                 return (ax * ax + ay * ay) < (bx * bx + by * by);
-//             }
-//         );
-
-//         bool isRobtop = playLayer->isRobtop(playLayer->m_level);
-//         std::string coinType = isRobtop ? "Secret" : "User";
-//         log::info("Coin count: {}", levelCoins.size());
-
-//         for (int i = 0; i < levelCoins.size(); i++) {
-//             if (playLayer->hasCoin(i + 1)) {
-//                 auto coinSpr = typeinfo_cast<CCSprite*>(levelCoins[i]);
-                
-//                 if (!coinSpr) continue;
-//                 coinSpr->stopAllActions();
-
-//                 auto coinAnim = CCAnimation::create();
-//                 CCSpriteFrame* firstFrame = nullptr;
-
-//                 for (int j = 1; j <= 4; j++) {
-//                     std::string coinName = fmt::format("{}Coin{}.png"_spr, coinType, j);
-//                     if (auto coinFrame = getFrameByName(coinName.c_str())) {
-//                         if (!firstFrame) firstFrame = coinFrame;
-//                         coinAnim->addSpriteFrame(coinFrame);
-//                     }
-//                 }
-
-//                 if (coinAnim->getFrames() && coinAnim->getFrames()->count() > 0) {
-//                     coinAnim->setDelayPerUnit(0.1f);
-//                     if (firstFrame) coinSpr->setDisplayFrame(firstFrame);
-//                     coinSpr->runAction(CCRepeatForever::create(CCAnimate::create(coinAnim)));
-
-//                     coinSpr->setColor({ 255, 255, 255 });
-//                     coinSpr->setID("blue-coin"_spr);
-//                 }
-//             }
-//         }
-//     }
-// };
