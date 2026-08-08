@@ -167,9 +167,28 @@ class $modify(CCSprite) {
 };
 
 class $modify(GameObject) {
+    // bool shouldModify() {
+    //     if (this->m_isHide) return false;
+    //     if (this->getOpacity() < 255) return true;
+    //     // Check for lower opacity coins next
+    //     // Fixed lower opacity coin anim
+
+    //     // Conflict when both lower opacity and not on screen
+
+    //     return this->m_isUIObject;
+    // }
+
     void playDestroyObjectAnim(GJBaseGameLayer* gameLayer) {
         if (m_objectID == 142 || m_objectID == 1329) {
-            if (gameLayer->m_isEditor || !this->m_isUIObject) {
+            // log::info("Is UIObj: {}", this->m_isUIObject);
+            // log::info("Is Vis: {}", this->isVisible());
+            // log::info("Is Invis: {}", this->m_isInvisible);
+
+            // // While logging
+            // GameObject::playDestroyObjectAnim(gameLayer);
+            // return;
+
+            if (gameLayer->m_isEditor || !this->isVisible()) {
                 GameObject::playDestroyObjectAnim(gameLayer);
                 return;
             }
